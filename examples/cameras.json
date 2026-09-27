@@ -1,0 +1,40 @@
+{
+  "cameras": [
+    {
+      "name": "wrist_rgb",
+      "device_path": "/dev/v4l/by-id/usb-1080P_USB_Camera-video-index0",
+      "width": 1280,
+      "height": 720,
+      "fps": 30,
+      "pixel_format": "mjpeg",
+      "required": true,
+      "startup_timeout": 5.0,
+      "fresh_timeout": 2.0,
+      "max_age": 1.0
+    },
+    {
+      "name": "front_rgb",
+      "device_path": "/dev/v4l/by-path/pci-0000:0e:00.0-usb-0:3.1:1.0-video-index0",
+      "width": 640,
+      "height": 480,
+      "fps": 30,
+      "pixel_format": "mjpeg",
+      "required": true,
+      "startup_timeout": 5.0,
+      "fresh_timeout": 2.0,
+      "max_age": 1.0
+    },
+    {
+      "name": "right_rgb",
+      "device_path": "/dev/v4l/by-path/pci-0000:0e:00.0-usb-0:3.2:1.0-video-index0",
+      "width": 640,
+      "height": 480,
+      "fps": 30,
+      "pixel_format": "mjpeg",
+      "required": true,
+      "startup_timeout": 5.0,
+      "fresh_timeout": 2.0,
+      "max_age": 1.0
+    }
+  ]
+}

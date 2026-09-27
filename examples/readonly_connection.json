@@ -1,0 +1,15 @@
+{
+  "connection": {
+    "host": null,
+    "dashboard_port": 29999,
+    "feedback_port": 30004,
+    "timeout": 2.0,
+    "feedback_max_age": 0.25,
+    "expected_protocol_version": "4.6.5",
+    "controller_firmware": null,
+    "protocol_compatibility_confirmed": false,
+    "tcp_control_owned": null,
+    "user_frame": null,
+    "tool_frame": null
+  }
+}

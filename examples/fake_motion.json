@@ -1,0 +1,19 @@
+{
+  "control_hz": 10,
+  "safety": {
+    "workspace_low": [0.1, -0.2, 0.01],
+    "workspace_high": [0.5, 0.2, 0.5],
+    "minimum_tcp_z": 0.08,
+    "user_frame": 0,
+    "tool_frame": 0,
+    "max_translation_step": 0.02,
+    "max_orientation_step": 0.1,
+    "speed_percent": 5,
+    "acceleration_percent": 5,
+    "position_tolerance": 0.0001,
+    "orientation_tolerance": 0.001,
+    "settle_timeout": 0.5,
+    "telemetry_max_age": 0.25,
+    "poll_interval": 0.01
+  }
+}

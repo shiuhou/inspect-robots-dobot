@@ -1,0 +1,19 @@
+{
+  "start_position_tolerance": 0.0002,
+  "start_orientation_tolerance": 0.002,
+  "max_measurement_age": 0.25,
+  "consecutive_samples": 5,
+  "io_timeout": 0.05,
+  "acknowledgement_timeout": 0.5,
+  "stop_timeout": 2.0,
+  "standstill_position_tolerance": 0.0002,
+  "standstill_orientation_tolerance": 0.002,
+  "authority_lifetime": 30.0,
+  "model": "FIXTURE_ONLY",
+  "firmware": null,
+  "rig_verification_reference": "FIXTURE_ONLY_NO_HARDWARE_EVIDENCE",
+  "interruption_verification_reference": "FIXTURE_ONLY_NO_HARDWARE_EVIDENCE",
+  "tool_tcp_description": "Fixture only; TCP is NOT calibrated.",
+  "payload_description": "Fixture only; payload is PROVISIONAL and NOT calibrated.",
+  "threshold_class": "ENGINEERING_THRESHOLD_FOR_FIRST_MICROMOVE"
+}

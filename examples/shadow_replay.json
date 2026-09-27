@@ -1,0 +1,12 @@
+{
+  "response": {
+    "action": "translate",
+    "candidate_id": "+X",
+    "rationale_summary": "Replay fixture selects one bounded approach step.",
+    "confidence": 0.8,
+    "terminate": false,
+    "observe_again": true,
+    "gripper_proposal": "none"
+  },
+  "images": null
+}

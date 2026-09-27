@@ -1,0 +1,30 @@
+{
+  "connection": {
+    "host": "192.0.2.1",
+    "dashboard_port": 29999,
+    "feedback_port": 30004,
+    "timeout": 0.05,
+    "expected_protocol_version": "4.6.5",
+    "controller_firmware": null,
+    "protocol_compatibility_confirmed": false,
+    "tcp_control_owned": null,
+    "user_frame": 0,
+    "tool_frame": 0
+  },
+  "local_micro_move": {
+    "direction": "+Z",
+    "distance_m": 0.01,
+    "user_frame": 0,
+    "tool_frame": 0,
+    "speed_percent": 5,
+    "acceleration_percent": 5,
+    "measurement_margin_m": 0.0005,
+    "position_tolerance": 0.0002,
+    "orientation_tolerance": 0.002,
+    "max_orientation_step": 0.01,
+    "settle_timeout": 5.0,
+    "telemetry_max_age": 0.25,
+    "poll_interval": 0.05,
+    "threshold_class": "ENGINEERING_THRESHOLD_FOR_FIRST_MICROMOVE"
+  }
+}

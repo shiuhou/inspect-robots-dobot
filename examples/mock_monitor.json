@@ -1,0 +1,16 @@
+{
+  "start_position_tolerance": 0.0005,
+  "start_orientation_tolerance": 0.005,
+  "max_measurement_age": 0.2,
+  "consecutive_samples": 3,
+  "io_timeout": 0.05,
+  "acknowledgement_timeout": 0.25,
+  "stop_timeout": 1.0,
+  "standstill_position_tolerance": 0.0002,
+  "standstill_orientation_tolerance": 0.001,
+  "authority_lifetime": 30.0,
+  "model": "MOCK_MODEL_NOT_A_RIG_PROFILE",
+  "firmware": "MOCK_FIRMWARE",
+  "rig_verification_reference": "MOCK_ONLY_NO_HARDWARE_EVIDENCE",
+  "interruption_verification_reference": "MOCK_ONLY_NO_HARDWARE_EVIDENCE"
+}
