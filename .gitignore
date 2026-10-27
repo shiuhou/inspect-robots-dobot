@@ -15,5 +15,7 @@ dist/
 run-evidence/
 run-logs/
 logs/
+
+# Local engineering plans and diagnostic runs; shared rules stay in the meta repo.
 .agents/*
 !.agents/docs/

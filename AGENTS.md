@@ -26,3 +26,7 @@ is reachable on `main`, update the parent `/home/dsa/project/dobot` meta reposit
 submodule SHA and `components.lock.yaml`, then publish the meta update. Never copy
 component source into the meta repository and never include other checkout's dirty
 work in a focused commit.
+
+## Shared engineering specification
+
+Apply the Dobot workspace [engineering specification](https://github.com/shiuhou/dobot-astra-lab/blob/7106a99/.agents/docs/SPEC.md). In a Dobot workspace, read the root `.agents/docs/SPEC.md`; for a standalone clone use the pinned link. This is the single source for baseline/root-cause review, improvement acceptance, retirement, behavior validation and bounded artifacts. Preserve this repository's hardware, testing and publication rules. Keep tests/configuration in this repository; `.agents/` tracks only `docs/`, with plans/runs kept local. Complex tasks use one plan with a §0 progress/handoff section; simple tasks need none.
