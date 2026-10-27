@@ -86,3 +86,11 @@ Leader serial settings, camera credentials, raw hardware traces, provider keys,
 or upstream `inspect-robots` source. Keep local runtime settings outside the
 repository and publish component changes here before updating the workspace meta
 repository's submodule pin.
+
+## Dream-1 API and offline Nova2 observations
+
+An isolated, zero-motion Dream-1 boundary provides model discovery, read-only
+measured observations, a locally validated single-arm schema, deterministic
+fixtures and compatible-checkpoint-only recorded inference. Public YAM models
+are blocked for Nova2; authenticated discovery does not prove robot compatibility.
+See [commands, compatibility and adaptation requirements](.agents/docs/dream-1.md).

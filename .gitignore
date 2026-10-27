@@ -15,3 +15,5 @@ dist/
 run-evidence/
 run-logs/
 logs/
+.agents/*
+!.agents/docs/
