@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="__CSP__">
+<title>Astra · 任務監看</title>
+<style>
+:root{color-scheme:dark;--bg:#0c1119;--card:#131c29;--line:#263346;--ink:#e9eff7;--muted:#9baabc;--accent:#8ed4c1;--warn:#ebbf77}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 system-ui,-apple-system,"Noto Sans TC",sans-serif}
+main{max-width:1420px;margin:auto;padding:26px 32px 40px}header{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:22px}
+.brand{font-size:21px;font-weight:650;letter-spacing:.04em}.brand span{font-size:14px;font-weight:400;letter-spacing:0;color:var(--muted);margin-left:14px}
+.connection{font-size:13px;color:var(--muted)}.connection.bad{color:var(--warn)}h1,h2,h3,p{margin:0}h1{font-size:clamp(23px,2.5vw,31px);line-height:1.4;font-weight:600;margin:7px 0 13px}
+h2{font-size:16px;font-weight:600}h3{font-size:13px;font-weight:500;color:var(--muted)}.eyebrow{font-size:11px;letter-spacing:.13em;color:var(--muted);text-transform:uppercase}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:21px}.hero{display:grid;grid-template-columns:1fr auto;gap:28px;margin-bottom:16px}
+.badges{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.badge{padding:3px 10px;border-radius:6px;background:#243143;font-size:12px;color:#cbd8e8}
+.badge.demo,.badge.shadow{color:var(--warn);background:#352e24}.badge.live{color:var(--accent);background:#18352f}
+.stage{font-size:22px;font-weight:600;margin-top:9px}.stagebox{min-width:195px;border-left:1px solid var(--line);padding-left:28px;display:flex;flex-direction:column;justify-content:center}
+.subtle{font-size:12px;color:var(--muted)}.banner{padding:10px 15px;border:1px solid #4a4030;border-radius:8px;background:#221f1a;color:#dfc49c;margin-bottom:16px;font-size:13px}
+.cameras{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-bottom:16px}.camera{padding:0;overflow:hidden}
+.camerahead{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;font-size:13px}
+.camerahead span{color:var(--muted);font:11px ui-monospace,monospace}.imagearea{aspect-ratio:16/10;background:#080d14;display:grid;place-items:center;overflow:hidden}
+.imagearea img{width:100%;height:100%;object-fit:contain;display:block}.placeholder{color:var(--muted);padding:22px;text-align:center;font-size:13px}.placeholder strong{display:block;font-size:22px;color:#546276;font-weight:400;margin-bottom:8px}
+.caption{font-size:11px;color:var(--muted);padding:10px 15px;min-height:38px;overflow-wrap:anywhere}.lower{display:grid;grid-template-columns:1.2fr 1fr;gap:16px}
+.camera-intro{display:flex;justify-content:space-between;gap:16px;margin:18px 0 10px;font-size:13px}.preview-status{color:var(--warn)}.preview-status.ok{color:var(--accent)}
+.titlebar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px}.tag{font-size:12px;color:var(--accent);font-family:ui-monospace,monospace}
+.note{font-size:16px;line-height:1.75;margin:0 0 20px;white-space:pre-wrap;overflow-wrap:anywhere}.datahead{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:13px}th,td{text-align:right;padding:9px 8px;border-bottom:1px solid var(--line)}th{font-weight:400;color:var(--muted);font-size:12px}th:first-child,td:first-child{text-align:left;width:15%}td:last-child{color:var(--accent)}
+.smallgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:17px}.value{font-size:16px;margin-top:3px;overflow-wrap:anywhere}
+.checks{display:grid;gap:0}.check{display:flex;justify-content:space-between;gap:18px;border-bottom:1px solid var(--line);padding:10px 0;font-size:13px}
+.check>span:first-child{color:var(--muted)}.check>span:last-child{text-align:right}.result{margin-top:16px;border-radius:8px;background:#0e1722;padding:13px 15px;font-size:14px;overflow-wrap:anywhere}
+.result strong{display:block;font-size:11px;color:var(--muted);font-weight:500;margin-bottom:5px}.reject{color:var(--warn);margin-top:9px;font-size:13px;overflow-wrap:anywhere}
+details{margin-top:16px;font-size:12px;color:var(--muted)}summary{cursor:pointer;padding:8px 0}code{font-family:ui-monospace,monospace;overflow-wrap:anywhere}
+.history{display:flex;align-items:center;flex-wrap:wrap;gap:12px;margin-top:20px}.history label{font-size:13px;color:var(--muted)}select{font:12px system-ui;background:#141e2b;color:var(--ink);border:1px solid var(--line);border-radius:7px;padding:9px 10px;min-width:260px;max-width:100%}select:focus{outline:2px solid var(--accent);outline-offset:2px}
+.warnings{color:var(--warn);white-space:pre-wrap;overflow-wrap:anywhere}footer{margin-top:18px;display:flex;justify-content:space-between;gap:20px;font-size:11px;color:var(--muted)}
+.empty{padding:42px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:12px}
+[hidden]{display:none!important}@media(max-width:850px){main{padding:18px}.lower{grid-template-columns:1fr}.hero{gap:16px}.stagebox{min-width:145px;padding-left:18px}.brand span{display:block;margin:0;font-size:12px}.cameras{gap:10px}.camerahead{display:block}.camerahead span{display:block}}
+@media(max-width:560px){.hero{grid-template-columns:1fr}.stagebox{border:0;border-top:1px solid var(--line);padding:12px 0 0}.cameras{grid-template-columns:1fr}.imagearea{aspect-ratio:16/9}header{align-items:flex-start}.card{padding:16px}.camera{padding:0}footer{display:block}.history{align-items:stretch}select{width:100%}}
+</style>
+</head>
+<body>
+<main>
+ <header><div class="brand">ASTRA<span>任務監看 / Dobot Nova</span></div><div class="connection" id="connection" role="status">載入紀錄</div></header>
+ <div class="banner" id="banner" role="status">唯讀紀錄</div>
+ <div id="empty" class="empty" hidden>尚未找到可讀的 Astra 任務紀錄。等待資料產生端寫入檔案。</div>
+ <div id="task-content">
+  <section class="card hero">
+   <div><div class="eyebrow">Task / 任務</div><h1 id="task">—</h1><div class="badges"><span class="badge" id="mode">—</span><span class="badge" id="model">—</span><span class="subtle" id="age">—</span></div></div>
+   <div class="stagebox"><div class="eyebrow">最後記錄階段</div><div class="stage" id="stage">—</div><span class="subtle" id="success">任務成功：未確認</span></div>
+  </section>
+ </div>
+  <div class="camera-intro"><h2>三鏡頭即時預覽</h2><span class="subtle">現場畫面 · 不代表 Astra 上次推理收到的那一幀</span></div>
+  <section class="cameras" aria-label="三鏡頭即時預覽">
+   <article class="card camera"><div class="camerahead">前方觀測<span>front_rgb</span></div><div class="imagearea" id="image-front_rgb"></div><div class="caption" id="caption-front_rgb"></div></article>
+   <article class="card camera"><div class="camerahead">右側觀測<span>right_rgb</span></div><div class="imagearea" id="image-right_rgb"></div><div class="caption" id="caption-right_rgb"></div></article>
+   <article class="card camera"><div class="camerahead">腕部觀測<span>wrist_rgb</span></div><div class="imagearea" id="image-wrist_rgb"></div><div class="caption" id="caption-wrist_rgb"></div></article>
+  </section>
+ <div id="content">
+  <div class="lower">
+   <section class="card"><div class="titlebar"><h2>Astra 這一步要做什麼</h2><span id="action" class="tag">—</span></div><p class="note" id="note">未提供動作說明</p>
+    <div class="datahead"><h3>末端位置與預計位移</h3><span class="subtle">mm · 原紀錄座標系</span></div>
+    <table><thead><tr><th>軸</th><th>觀測位置</th><th>目標位置</th><th>預計位移</th></tr></thead><tbody id="coordinates"></tbody></table>
+    <div class="smallgrid"><div><h3>夾爪意圖</h3><div class="value" id="gripper">—</div></div><div><h3>本次模型回覆耗時</h3><div class="value" id="latency">—</div></div></div>
+   </section>
+   <section class="card"><div class="titlebar"><h2>檢查與執行結果</h2><span class="subtle">依紀錄顯示</span></div>
+    <div class="checks"><div class="check"><span>動作預檢</span><span id="precheck">—</span></div><div class="check"><span>Framework approver</span><span id="approver">—</span></div><div class="check"><span>已記錄的運動命令數</span><span id="motion-count">—</span></div><div class="check"><span>已記錄的夾爪命令數</span><span id="gripper-count">—</span></div><div class="check"><span>RobotMode（最後紀錄）</span><span id="robot-mode">—</span></div></div>
+    <div class="result"><strong>EXECUTION / 執行</strong><span id="result">未提供執行結果</span></div><p class="reject" id="rejection" hidden></p>
+    <details><summary>紀錄來源與識別碼</summary><div>檔案：<code id="file">—</code></div><div>Run：<code id="run-id">—</code></div><div>Decision：<code id="decision-id">—</code></div><div id="time-source">—</div><div class="subtle">資料來源陳述不等於獨立硬體驗證。頁面不推斷任務成功。</div></details>
+   </section>
+  </div>
+ </div>
+ <div class="history"><label for="records">查看決策紀錄</label><select id="records"><option value="">跟隨最新紀錄</option></select><span class="subtle">依檔案時間排序；不假定為同一段連續任務</span></div>
+ <details id="warnings-box" hidden><summary>資料讀取提示</summary><div id="warnings" class="warnings"></div></details>
+ <footer><span>唯讀監看 · 不發送動作或 Stop · 共用任務相機畫面</span><span id="refresh-note">本地紀錄</span></footer>
+</main>
+<script type="application/json" id="initial-state">__INITIAL_STATE__</script>
+<script>
+"use strict";
+const initial = JSON.parse(document.getElementById("initial-state").textContent);
+const el = id => document.getElementById(id);
+const put = (id, value, fallback) => { el(id).textContent = value === null || value === undefined || value === "" ? (fallback || "未提供") : String(value); };
+const roles = ["front_rgb", "right_rgb", "wrist_rgb"];
+const modeNames = {shadow:"SHADOW · 未實體執行",demo:"DEMO · 示意資料",replay:"REPLAY · 歷史紀錄",live:"LIVE · 資料來源宣告"};
+const checks = {approved:"已批准",APPROVED:"已批准",passed:"通過",PASS:"通過",REJECTED:"已拒絕",rejected:"已拒絕",NOT_RECORDED:"未記錄明確結果"};
+const grips = {OPEN:"打開",CLOSED:"閉合",release:"打開",grasp:"閉合",hold:"保持",none:"保持",target:"指定開度"};
+let selection = new URLSearchParams(location.search).get("record") || "";
+let snapshot = initial.snapshot;
+function draw(state) {
+ snapshot = state;
+ const item = state.current;
+ el("empty").hidden = !!item; el("content").hidden = !item; el("task-content").hidden = !item;
+ el("warnings-box").hidden = !state.warnings.length;
+ put("warnings", state.warnings.join("\n"), "");
+ const menu = el("records"); menu.replaceChildren(new Option("跟隨最新紀錄", ""));
+ state.history.forEach(row => menu.add(new Option((row.action_name || "紀錄") + " · " + row.file, row.file)));
+ menu.value = selection;
+ menu.disabled = !initial.watching;
+ put("refresh-note", initial.watching ? "每秒讀取本地檔案；更新速度取決於資料產生端" : "離線 HTML 快照 · 不會自動更新");
+ if (!item) { put("banner","沒有可顯示的有效紀錄；不沿用舊狀態推定機械臂仍在執行。"); return; }
+ put("task", item.task); put("model", item.model); put("mode", modeNames[item.mode]);
+ el("mode").className = "badge " + item.mode;
+ put("stage", item.stage_label); put("action", item.action_name);
+ put("success", item.task_success === null ? "任務成功：未確認" : "資料來源回報任務" + (item.task_success ? "成功" : "失敗"));
+ put("note", item.note, "這筆紀錄沒有提供 Astra 的動作說明。");
+ put("age", "資料距今 " + Math.round(item.age_s) + " 秒");
+ const banner = item.mode === "demo" ? "這是任務資料示範，沒有實體執行；即時預覽若開啟，會與示範任務資料分開標示。"
+  : item.stale ? "歷史／過期紀錄：下方是最後保存的狀態，無法據此判定機械臂現在正在做什麼。"
+  : item.mode === "shadow" ? "Shadow 決策紀錄：模型提出了動作，但沒有實體執行。"
+  : "只呈現資料產生端已寫入的狀態；本頁不控制機械臂。";
+ put("banner", banner);
+ const tbody = el("coordinates"); tbody.replaceChildren();
+ ["X","Y","Z"].forEach((axis,index) => {
+  const tr = document.createElement("tr");
+  [axis, item.current_xyz_m ? (item.current_xyz_m[index]*1000).toFixed(2) : "—",
+   item.target_xyz_m ? (item.target_xyz_m[index]*1000).toFixed(2) : "—",
+   item.delta_mm ? ((item.delta_mm[index]>0?"+":"") + item.delta_mm[index].toFixed(2)) : "—"].forEach(value => {
+    const td = document.createElement("td"); td.textContent=value; tr.append(td);
+   }); tbody.append(tr);
+ });
+ put("gripper", grips[item.gripper_intent] || item.gripper_intent);
+ put("latency", item.latency_s === null ? null : item.latency_s.toFixed(2) + " s");
+ put("precheck", checks[item.pre_check] || item.pre_check);
+ put("approver", checks[item.approver] || item.approver);
+ put("motion-count",item.motion_commands_sent); put("gripper-count",item.gripper_commands_sent);
+ put("robot-mode",item.robot_mode); put("result",item.execution_result);
+ el("rejection").hidden=!item.rejection_reason; put("rejection",item.rejection_reason);
+ put("file",item.file); put("run-id",item.run_id); put("decision-id",item.decision_id);
+ put("time-source",item.time_basis + "：" + item.updated_at);
+}
+// Live preview is independent of selected evidence/history and never opens V4L2.
+function previewPlaceholder(role, message) {
+ const area=el("image-"+role), previous=area.querySelector("img");
+ if (previous) { previous.onerror=null; previous.removeAttribute("src"); }
+ const p=document.createElement("div"); p.className="placeholder"; p.textContent=message;
+ area.replaceChildren(p);
+ el("caption-"+role).className="caption preview-status";
+ put("caption-"+role,message);
+}
+function showPreview(health) {
+ roles.forEach(role=>{
+  const row=(health.cameras || {})[role];
+  if (!health.available || !row) { previewPlaceholder(role,"目前沒有可用的即時畫面"); return; }
+  if (!row.mapping_verified) { previewPlaceholder(role,"相機名稱與既有配置不符，暫停顯示"); return; }
+  if (!row.ok) { previewPlaceholder(role,"畫面過期或擷取中斷，暫停顯示"); return; }
+  const area=el("image-"+role);
+  if (!area.querySelector("img")) {
+   const img=document.createElement("img"); img.alt=role+" 現場即時預覽";
+   img.referrerPolicy="no-referrer";
+   img.onerror=()=>previewPlaceholder(role,"串流中斷；等待預覽服務恢復");
+   img.src=initial.preview.streams[role]; area.replaceChildren(img);
+  }
+  if (initial.preview.snapshots) {
+   const img=area.querySelector("img"), frame=String(row.frame_id);
+   if (img.dataset.frame !== frame) {
+    img.dataset.frame=frame;
+    img.src=initial.preview.streams[role]+"?frame="+encodeURIComponent(frame);
+   }
+  }
+  el("caption-"+role).className="caption preview-status ok";
+  put("caption-"+role,"來源正常 · "+(row.fps===null?"—":row.fps.toFixed(1))+" FPS · 最新擷取距今 "+row.age_s.toFixed(2)+" s");
+ });
+}
+async function refreshPreview() {
+ const controller=new AbortController(), deadline=setTimeout(()=>controller.abort(),1800);
+ try {
+  const response=await fetch("/api/cameras",{cache:"no-store",signal:controller.signal});
+  if (!response.ok) throw new Error("preview unavailable");
+  showPreview(await response.json());
+ } catch (_error) { showPreview({available:false,cameras:{}}); }
+ finally { clearTimeout(deadline); setTimeout(refreshPreview,initial.preview.snapshots ? 200 : 1000); }
+}
+let timer = null;
+let busy = false;
+async function refresh() {
+ if (!initial.watching || busy) return;
+ busy = true;
+ const controller = new AbortController(), deadline = setTimeout(()=>controller.abort(),4000);
+ try {
+  const suffix = selection ? "?record="+encodeURIComponent(selection) : "";
+  const response = await fetch("/api/state"+suffix,{cache:"no-store",signal:controller.signal});
+  if (!response.ok) throw new Error("資料來源暫不可讀");
+  draw(await response.json()); put("connection","檔案監看中"); el("connection").className="connection";
+ } catch (_error) {
+  put("connection","更新中斷"); el("connection").className="connection bad";
+  put("banner","無法更新：保留畫面是舊資料，不能視為目前執行狀態。");
+ } finally {
+  clearTimeout(deadline); busy=false; timer=setTimeout(refresh,1000);
+ }
+}
+el("records").addEventListener("change",()=>{ selection=el("records").value; clearTimeout(timer); refresh(); });
+draw(snapshot);
+roles.forEach(role=>previewPlaceholder(role,initial.preview.enabled?"等待任務相機畫面…":"即時預覽未啟用（離線版面）"));
+if (initial.preview.enabled && initial.watching) refreshPreview();
+put("connection",initial.watching?"檔案監看中":"離線快照");
+if (initial.watching) timer=setTimeout(refresh,1000);
+</script>
+</body>
+</html>

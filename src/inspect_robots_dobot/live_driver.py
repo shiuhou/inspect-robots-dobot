@@ -29,7 +29,7 @@ from .errors import (
 )
 from .live_authority import AuthorityDetails, LiveMotionAuthority, plan_digest
 from .live_channel import MotionCancelled, _LiveDashboardChannel
-from .live_profile import LiveMotionProfile, OperatorReadiness
+from .live_profile import LiveMotionProfile, LiveTaskSession, OperatorReadiness
 from .local_envelope import LocalEnvelopeSafety, LocalMicroMoveEnvelope, envelope_safety
 from .motion import CartesianMotionPlan, build_motion_plan, decimal_micro_profile
 from .protocol import (
@@ -102,7 +102,7 @@ _TRANSITIONS = {
     LiveMotionState.FAULTED: {LiveMotionState.ABORTING},
     LiveMotionState.TIMEOUT: {LiveMotionState.ABORTING},
     LiveMotionState.ABORTING: {LiveMotionState.ABORTED, LiveMotionState.FAULTED},
-    LiveMotionState.COMPLETED: {LiveMotionState.FAULTED},
+    LiveMotionState.COMPLETED: {LiveMotionState.IDLE, LiveMotionState.FAULTED},
 }
 
 
@@ -143,6 +143,7 @@ class LiveDobotMotionDriver:
         transport_is_mock: bool = False,
         event_sink: Callable[[dict[str, Any]], None] | None = None,
         failure_alert: Callable[[str], None] | None = None,
+        task_session: LiveTaskSession | None = None,
     ) -> None:
         if type(allow_motion) is not bool or type(transport_is_mock) is not bool:
             raise ConfigurationError("runtime flags must be explicit booleans")
@@ -158,11 +159,22 @@ class LiveDobotMotionDriver:
         self._allow_motion, self._transport_is_mock = allow_motion, transport_is_mock
         self.clock = clock or SystemClock()
         self._event_sink, self._failure_alert = event_sink, failure_alert
+        self._task_session = task_session
+        self._task_started_at: float | None = None
+        self._task_deadline: float | None = None
+        self._task_completed_actions = 0
+        self._expected_idle_command_id: int | None = None
         self._handling_failure = False
         self._cancel = threading.Event()
         self._worker = threading.Lock()
         self._channel = _LiveDashboardChannel(
-            connection, profile, self.clock, socket_factory, self._cancel, self._audit_event
+            connection,
+            profile,
+            self.clock,
+            socket_factory,
+            self._cancel,
+            self._audit_event,
+            max_motion_attempts=task_session.max_motions if task_session else 1,
         )
         self._state = LiveMotionState.IDLE
         self._events: list[dict[str, Any]] = []
@@ -236,6 +248,10 @@ class LiveDobotMotionDriver:
     def connections_closed(self) -> bool:
         return self._connections_closed
 
+    @property
+    def expected_idle_command_id(self) -> int | None:
+        return self._expected_idle_command_id
+
     def _record(self, kind: str, **values: Any) -> None:
         self._events.append(
             {
@@ -287,7 +303,7 @@ class LiveDobotMotionDriver:
     def _confirm_readiness(self, readiness: OperatorReadiness) -> None:
         if not self._channel.connected or self._state is not LiveMotionState.IDLE:
             raise MotionNotAuthorized("readiness must be confirmed on an idle connected session")
-        readiness.require()
+        readiness.require(allow_active_gripper=self._task_session is not None)
         self._readiness = readiness
         self._record("operator_readiness", **asdict(readiness), provenance="operator/controller UI")
 
@@ -335,7 +351,7 @@ class LiveDobotMotionDriver:
             raise MotionCancelled("operator cancelled session")
         if self._readiness is None:
             raise MotionNotAuthorized("current-session operator readiness is absent")
-        self._readiness.require()
+        self._readiness.require(allow_active_gripper=self._task_session is not None)
         c, s = self.connection, self.profile.safety
         # After the first measurement the local settings are replaced by the
         # session-bound envelope projection. Keep the narrowly-scoped exception
@@ -348,10 +364,25 @@ class LiveDobotMotionDriver:
             raise MotionNotAuthorized(
                 "verified TCP ownership declaration is required; no RequestControl"
             )
-        if not local_micro_move and (
-            not c.protocol_compatibility_confirmed or c.controller_firmware != self.profile.firmware
+        if (
+            not local_micro_move
+            and (self._task_session is None or not self._task_session.allow_unknown_firmware)
+            and (
+                not c.protocol_compatibility_confirmed
+                or c.controller_firmware != self.profile.firmware
+            )
         ):
             raise MotionNotAuthorized("operator-verified firmware compatibility is required")
+        if self._task_session is not None:
+            if self._task_started_at is None:
+                raise MotionNotAuthorized("task session has not started")
+            if self._task_deadline is not None and self.clock.monotonic() >= self._task_deadline:
+                raise MotionNotAuthorized("task session lifetime expired")
+            if (
+                self._task_session.max_motions is not None
+                and self._task_completed_actions >= self._task_session.max_motions
+            ):
+                raise MotionNotAuthorized("task session motion budget exhausted")
         if (c.user_frame, c.tool_frame) != (s.user_frame, s.tool_frame):
             raise MotionNotAuthorized("verified explicit user/tool frames must match the profile")
 
@@ -457,13 +488,53 @@ class LiveDobotMotionDriver:
         with self._exclusive():
             return self._measure_start()
 
-    def _measure_start(self) -> RobotSnapshot:
+    def begin_task_session(self) -> None:
+        """Arm a reviewed multi-action session on the existing connection."""
+        with self._exclusive():
+            if self._task_session is None:
+                raise MotionNotAuthorized("no reviewed task-session configuration")
+            if not self._channel.connected or self._state is not LiveMotionState.IDLE:
+                raise MotionNotAuthorized("task session requires an idle connected gate")
+            if self._task_started_at is not None:
+                raise MotionNotAuthorized("task session already started")
+            now = self.clock.monotonic()
+            self._task_started_at = now
+            self._task_deadline = (
+                None
+                if self._task_session.lifetime_s is None
+                else now + self._task_session.lifetime_s
+            )
+            self._record(
+                "task_session_started",
+                max_motions=self._task_session.max_motions,
+                lifetime_s=self._task_session.lifetime_s,
+                authorization_reference=self._task_session.authorization_reference,
+                firmware_compatibility_confirmed=self.connection.protocol_compatibility_confirmed,
+                firmware_known=self.connection.controller_firmware is not None,
+            )
+
+    def observe_idle(self) -> RobotSnapshot:
+        """Read the idle state on this session without binding a motion envelope.
+
+        The current-session readiness gates still apply. This uses the sole
+        Dashboard channel; the real controller rejects a second connection.
+        """
+        with self._exclusive():
+            return self._observe_idle()
+
+    def _observe_idle(self) -> RobotSnapshot:
         self._gates()
         if self._state is not LiveMotionState.IDLE:
             raise MotionNotAuthorized("start measurement requires a new idle session")
         if self._bound_envelope is not None:
             raise MotionNotAuthorized("local start/envelope cannot be remeasured or regenerated")
         sample = self._sample(Deadline(self.clock, self.profile.max_measurement_age))
+        if sample.mode is not RobotMode.ENABLED_IDLE:
+            raise MotionNotAuthorized("observation requires an enabled idle robot")
+        return sample
+
+    def _measure_start(self) -> RobotSnapshot:
+        sample = self._observe_idle()
         if isinstance(self.profile.safety, LocalMicroMoveSettings):
             if sample.native_decimal is None:
                 raise SafetyRejected("native decimal measurement required for local envelope")
@@ -471,7 +542,9 @@ class LiveDobotMotionDriver:
             envelope = LocalMicroMoveEnvelope(
                 self.profile.safety,
                 sample,
-                sample.native_decimal.translated_10mm("+Z"),
+                sample.native_decimal.translated_mm(
+                    "+Z", int(self.profile.safety.distance_m * 1000)
+                ),
                 self._session,
                 uuid4().hex,
                 now,
@@ -538,11 +611,9 @@ class LiveDobotMotionDriver:
             now = self.clock.monotonic()
             expiry = now + self.profile.authority_lifetime if expires_at is None else expires_at
             if self._bound_envelope is not None:
-                if expires_at is not None and expires_at != self._bound_envelope.expires_at:
-                    raise MotionNotAuthorized(
-                        "local envelope expiry cannot be extended or replaced"
-                    )
-                expiry = self._bound_envelope.expires_at
+                if expires_at is not None and expires_at > self._bound_envelope.expires_at:
+                    raise MotionNotAuthorized("local envelope expiry cannot be extended")
+                expiry = min(expiry, self._bound_envelope.expires_at)
             if (
                 not math.isfinite(expiry)
                 or not now < expiry <= now + self.profile.authority_lifetime
@@ -684,6 +755,8 @@ class LiveDobotMotionDriver:
         standstill = False
         ambiguous = False
         cause = None
+        action_consumed = False
+        keep_task_channel = False
         try:
             if self._state is not LiveMotionState.ARMED_FOR_ONE_PLAN:
                 raise MotionNotAuthorized("session is not armed for an unused plan")
@@ -693,9 +766,11 @@ class LiveDobotMotionDriver:
             self._validate_start(plan, sample)
 
             def consume_before_send() -> None:
+                nonlocal action_consumed
                 self._validate_start(plan, sample)
                 self._verify_authority(plan, authority)
                 self._consumed = True
+                action_consumed = True
                 self._transition(
                     LiveMotionState.SENDING, "authority consumed before one write attempt"
                 )
@@ -717,6 +792,23 @@ class LiveDobotMotionDriver:
                 LiveMotionState.ACCEPTED, f"queue ResultID={command_id}; not completion"
             )
             final = self._monitor(plan, command_id)
+            if self._task_session is not None:
+                self._expected_idle_command_id = final.command_id
+                self._task_completed_actions += 1
+                keep_task_channel = (
+                    (
+                        self._task_session.max_motions is None
+                        or self._task_completed_actions < self._task_session.max_motions
+                    )
+                    and not self._cancel.is_set()
+                    and (
+                        self._task_deadline is None or self.clock.monotonic() < self._task_deadline
+                    )
+                )
+                self._authority = None
+                self._issued_details = None
+                self._consumed = False
+                self._transition(LiveMotionState.IDLE, "successful task action completed")
         except BaseException as exc:
             cause = f"{type(exc).__name__}: {exc}"
             self._handling_failure = True
@@ -745,14 +837,16 @@ class LiveDobotMotionDriver:
                 self._transition(LiveMotionState.REJECTED_BEFORE_SEND, cause)
         finally:
             self._handling_failure = True
-            self._invalidate()
+            if not keep_task_channel:
+                self._invalidate()
             try:
-                self._channel.close()
-                self._connections_closed = True
+                if not keep_task_channel:
+                    self._channel.close()
+                    self._connections_closed = True
             except Exception as exc:
                 self._record("close_failed", reason=str(exc))
                 cause = cause or f"close failed: {exc}"
-            self._closed = True
+            self._closed = not keep_task_channel
             self._worker.release()
         self._result = LiveMotionResult(
             self._state,
@@ -762,7 +856,7 @@ class LiveDobotMotionDriver:
             self._channel.stop_attempts,
             standstill,
             final,
-            self._consumed,
+            action_consumed,
             ambiguous,
             self.transport_is_mock,
             bool(self._channel.motion_attempts) and not self.transport_is_mock,

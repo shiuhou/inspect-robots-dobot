@@ -37,6 +37,8 @@ class _LiveDashboardChannel:
         factory: SocketFactory,
         cancellation: threading.Event,
         event_sink: Callable[[dict[str, Any]], None] | None = None,
+        *,
+        max_motion_attempts: int | None = 1,
     ) -> None:
         self.connection, self.profile, self.clock = connection, profile, clock
         self._factory, self.cancel = factory, cancellation
@@ -45,6 +47,7 @@ class _LiveDashboardChannel:
         self._pending: bytes | None = None
         self._writable = True
         self.motion_attempts = 0
+        self._max_motion_attempts = max_motion_attempts
         self.stop_attempts = 0
         self.records: list[dict[str, Any]] = []
         self._event_sink = event_sink
@@ -93,8 +96,11 @@ class _LiveDashboardChannel:
     def _move_once(self, request: DobotMovLRequest, before_send: Callable[[], None]) -> int:
         if type(request) is not DobotMovLRequest:
             raise ProtocolError("only the immutable DobotMovLRequest is accepted")
-        if self.motion_attempts:
-            raise DriverFault("one motion attempt per channel; resend is forbidden")
+        if (
+            self._max_motion_attempts is not None
+            and self.motion_attempts >= self._max_motion_attempts
+        ):
+            raise DriverFault("reviewed channel motion budget exhausted; resend is forbidden")
 
         def consume() -> None:
             before_send()

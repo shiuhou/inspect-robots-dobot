@@ -35,3 +35,19 @@ provide calibration.
 For API facts, use the workspace TCP/IP reference and verify ambiguous tables
 against the original PDF. Do not replace an unknown hardware fact with a guessed
 default.
+
+
+### Explicit research task sessions
+
+`LiveTaskSession` optionally retains one Dashboard connection across successful,
+individually authorized actions. It does not relax the default one-action path.
+Cancellation, failure, expiry or exhausted motion budget forbids subsequent sends.
+An unknown-firmware exception is honored only when explicitly acknowledged in the
+session; mere presence of a session does not bypass compatibility checks.
+
+`SafetyProfile.workspace_mode="z_floor_only"` is an explicit research configuration
+with null XYZ bounds and a finite floor. It does not claim lateral or upper clearance;
+keepouts and step limits still apply. The default remains a bounded workspace.
+Local +Z envelopes remain session-bound and cannot become general grasp profiles.
+Five- and ten-millimetre +Z trials preserve the measured decimal pose and one-use
+motion boundary. These software contracts are not physical validation.

@@ -11,7 +11,7 @@ from inspect_robots.types import Action
 from inspect_robots_dobot.camera import FakeCamera
 from inspect_robots_dobot.config import CameraConfig, DobotConfig
 from inspect_robots_dobot.driver import FakeDobotDriver
-from inspect_robots_dobot.embodiment import DobotEmbodiment
+from inspect_robots_dobot.embodiment import DobotEmbodiment, build_info
 from inspect_robots_dobot.errors import (
     CameraFault,
     ConfigurationError,
@@ -24,6 +24,15 @@ from inspect_robots_dobot.errors import (
 from inspect_robots_dobot.safety import MotionAuthority
 
 SCENE = Scene(id="offline", instruction="Move a synthetic arm")
+
+
+def test_floor_profile_does_not_invent_finite_framework_bounds(floor_profile):
+    info = build_info(DobotConfig(floor_profile, 10))
+    assert info.action_space.low is None and info.action_space.high is None
+    assert info.action_space.semantics.max_step[:3] == pytest.approx(
+        (floor_profile.max_translation_step / np.sqrt(3),) * 3
+    )
+    assert not check_embodiment(info).ok
 
 
 def test_current_contract_and_no_motion_in_lifecycle(embodiment, driver, pose):

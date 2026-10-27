@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import builtins
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -56,6 +57,17 @@ def profile():
         settle_timeout=0.5,
         telemetry_max_age=0.25,
         poll_interval=0.01,
+    )
+
+
+@pytest.fixture
+def floor_profile(profile):
+    return replace(
+        profile,
+        workspace_mode="z_floor_only",
+        workspace_low=None,
+        workspace_high=None,
+        max_translation_step=0.005,
     )
 
 

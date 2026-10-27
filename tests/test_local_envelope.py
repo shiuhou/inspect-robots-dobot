@@ -25,8 +25,15 @@ ROOT = Path(__file__).parents[1]
 
 
 @pytest.fixture
-def local(clock, monkeypatch, tmp_path):
+def local(clock, monkeypatch, tmp_path, request):
     config = load_config(ROOT / "examples/live_profile.json")
+    if getattr(request, "param", None) == 0.005:
+        config = replace(
+            config,
+            local_micro_move=replace(
+                config.local_micro_move, distance_m=0.005, minimum_tcp_z=0.1911425
+            ),
+        )
     profile = load_live_profile(ROOT / "examples/live_monitor.json", config.local_micro_move)
     # EXCLUSIVELY mock gates. Never persist this invented firmware in production files.
     profile = replace(profile, firmware="fixture-fw")
@@ -63,7 +70,7 @@ def local(clock, monkeypatch, tmp_path):
                 )
 
     peer = ExactPeer(start, clock)
-    native_target = raw.translated_10mm("+Z")
+    native_target = raw.translated_mm("+Z", int(config.local_micro_move.distance_m * 1000))
     peer.execution.append(
         replace(
             start,
@@ -112,6 +119,53 @@ def run(local, clock):
         _socket_factory=factory,
         _clock=clock,
     )
+
+
+@pytest.mark.parametrize("local", [0.005], indirect=True)
+def test_five_mm_unknown_firmware_trial_preserves_decimal_pose_and_one_use(local, clock):
+    config, profile = local[:2]
+    config = replace(
+        config,
+        connection=replace(
+            config.connection, controller_firmware=None, protocol_compatibility_confirmed=False
+        ),
+    )
+    profile = replace(profile, firmware=None)
+    trial = (config, profile, *local[2:])
+    report = run(trial, clock)
+    assert report["status"] == "MOCK_OK"
+    assert report["delta_measured_m"] == pytest.approx([0, 0, 0.005])
+    command = movements(local[2])
+    assert len(command) == 1 and b"380.55" in command[0]
+    assert b"v=5" in command[0] and b"a=5" in command[0]
+    assert (
+        report["pose_before"]["native_decimal"]["values"][3:]
+        == report["pose_after"]["native_decimal"]["values"][3:]
+    )
+    assert config.connection.protocol_compatibility_confirmed is False
+
+
+@pytest.mark.parametrize("local", [0.005], indirect=True)
+def test_five_mm_local_session_cannot_cross_recorded_floor(local, clock):
+    from inspect_robots_dobot.local_envelope import LocalMicroMoveEnvelope
+
+    settings = local[0].local_micro_move
+    start = replace(local[2].start, pose=replace(local[2].start.pose, z=0.190))
+    raw = replace(
+        start.native_decimal,
+        values=(*start.native_decimal.values[:2], "190", *start.native_decimal.values[3:]),
+    )
+    start = replace(start, native_decimal=raw, pose=from_native(raw.native))
+    with pytest.raises(SafetyRejected, match="floor"):
+        LocalMicroMoveEnvelope(
+            settings,
+            start,
+            raw.translated_mm("+Z", 5),
+            "session",
+            "chunk",
+            clock.monotonic(),
+            clock.monotonic() + 1,
+        )
 
 
 def test_actual_files_keep_unknown_firmware_truthful_and_allow_local_exception(local, clock):
@@ -321,7 +375,7 @@ def test_authority_cannot_extend_envelope_expiry(local, clock):
     driver.close()
 
 
-@pytest.mark.parametrize("change", ["geometry", "budget", "speed", "tolerance"])
+@pytest.mark.parametrize("change", ["geometry", "budget", "speed", "tolerance", "floor_mode"])
 def test_projection_cannot_widen(local, clock, change):
     driver, _, _ = prepared(local, clock)
     kwargs = {
@@ -329,6 +383,11 @@ def test_projection_cannot_widen(local, clock, change):
         "budget": {"max_translation_step": 0.02},
         "speed": {"speed_percent": 6},
         "tolerance": {"position_tolerance": 0.0003},
+        "floor_mode": {
+            "workspace_mode": "z_floor_only",
+            "workspace_low": None,
+            "workspace_high": None,
+        },
     }[change]
     with pytest.raises(ConfigurationError):
         replace(driver.validation_safety, **kwargs)

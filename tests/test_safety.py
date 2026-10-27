@@ -14,7 +14,7 @@ from inspect_robots_dobot.safety import (
     action_target,
     validate_target,
 )
-from inspect_robots_dobot.types import RobotMode
+from inspect_robots_dobot.types import PoseSI, RobotMode
 
 
 @pytest.fixture
@@ -180,3 +180,93 @@ def test_camera_config_requires_valid_dimensions_and_time():
         CameraConfig(0, 10, 1, 1)
     with pytest.raises(ConfigurationError):
         CameraConfig(10, 10, -1, 1)
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"workspace_low": None, "workspace_high": None},
+        {"workspace_mode": "other"},
+        {"workspace_mode": True},
+        {"workspace_mode": "z_floor_only"},
+        {"workspace_mode": "z_floor_only", "workspace_low": None},
+        {"workspace_mode": "z_floor_only", "workspace_high": None},
+        {
+            "workspace_mode": "z_floor_only",
+            "workspace_low": None,
+            "workspace_high": None,
+            "minimum_tcp_z": float("nan"),
+        },
+        {
+            "workspace_mode": "z_floor_only",
+            "workspace_low": None,
+            "workspace_high": None,
+            "minimum_tcp_z": True,
+        },
+    ],
+)
+def test_floor_mode_requires_explicit_unambiguous_configuration(profile, change):
+    with pytest.raises(ConfigurationError):
+        replace(profile, **change)
+
+
+def test_floor_config_roundtrip_preserves_absent_box(floor_profile, tmp_path):
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps({"safety": asdict(floor_profile)}))
+    assert load_config(path).safety == floor_profile
+    data = asdict(floor_profile)
+    del data["workspace_mode"]
+    path.write_text(json.dumps({"safety": data}))
+    with pytest.raises(ConfigurationError):
+        load_config(path)
+
+
+@pytest.mark.parametrize("axis,delta", [("x", 0.004), ("y", -0.004), ("z", 0.004)])
+def test_floor_allows_small_steps_outside_prior_box(
+    floor_profile, sample, pose, clock, axis, delta
+):
+    start = replace(pose, x=-0.5, y=0.5, z=0.6)
+    measured = replace(sample, pose=start)
+    target = replace(start, **{axis: getattr(start, axis) + delta})
+    distance, turn = validate_target(target, measured, floor_profile, clock.monotonic())
+    assert distance == pytest.approx(abs(delta)) and turn == 0
+
+
+def test_floor_rejects_current_or_target_below_minimum(floor_profile, sample, pose, clock):
+    at_floor = replace(pose, z=floor_profile.minimum_tcp_z)
+    measured = replace(sample, pose=at_floor)
+    assert validate_target(at_floor, measured, floor_profile, clock.monotonic()) == (0, 0)
+    below = replace(at_floor, z=at_floor.z - 0.001)
+    for target, current in ((below, measured), (at_floor, replace(measured, pose=below))):
+        with pytest.raises(SafetyRejected, match="below configured minimum"):
+            validate_target(target, current, floor_profile, clock.monotonic())
+
+
+def test_floor_preserves_step_orientation_and_freshness_gates(floor_profile, sample, pose, clock):
+    with pytest.raises(SafetyRejected, match="translation delta"):
+        validate_target(replace(pose, x=pose.x + 0.006), sample, floor_profile, clock.monotonic())
+    with pytest.raises(SafetyRejected, match="pinned"):
+        action_target([*pose.xyz, 0.01, 0, 0, 0], sample, pose, floor_profile)
+    clock.sleep(floor_profile.telemetry_max_age + 0.001)
+    with pytest.raises(SafetyRejected, match="age"):
+        validate_target(pose, sample, floor_profile, clock.monotonic())
+
+
+def test_exact_budget_step_accepts_float_roundoff(floor_profile, sample, clock):
+    # This pose mirrors the decimal values returned by the Nova live rig. The
+    # authored 5 mm step can become 0.005000000000000004 in SI float math.
+    start = replace(
+        sample,
+        pose=PoseSI(
+            -0.1812393,
+            -0.1168853,
+            0.3793816,
+            -3.118524636866184,
+            -0.0246859369402078,
+            3.1131525134285454,
+        ),
+    )
+    target = replace(start.pose, z=start.pose.z - 0.005)
+    distance, orientation = validate_target(target, start, floor_profile, clock.monotonic())
+    assert distance == pytest.approx(0.005)
+    assert orientation == pytest.approx(0.0)

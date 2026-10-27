@@ -22,7 +22,7 @@ from .live_authority import plan_digest
 from .live_driver import LiveDobotMotionDriver, LiveMotionState
 from .live_profile import LiveMotionProfile, OperatorReadiness
 from .local_envelope import LocalEnvelopeSafety
-from .motion import CartesianMotionPlan, build_micro_move_plan
+from .motion import CartesianMotionPlan, build_micro_move_plan, micro_move_distance
 from .transport import SocketFactory, open_socket
 from .types import RobotMode, RobotSnapshot
 from .units import orientation_distance, translation_distance
@@ -99,12 +99,13 @@ def validate_live_inputs(config: DobotConfig, profile: LiveMotionProfile, allow:
         firmware = str(profile.firmware).strip()
         if firmware.upper() in {"UNKNOWN", "TODO", "TBD", "NONE", "N/A"}:
             raise ConfigurationError("firmware is a placeholder, not reviewed rig data")
-    if profile.safety.max_translation_step < 0.010:
-        raise ConfigurationError("reviewed displacement budget does not permit the 10mm experiment")
+    distance = config.local_micro_move.distance_m if config.local_micro_move else 0.010
+    if profile.safety.max_translation_step < distance:
+        raise ConfigurationError("reviewed displacement budget does not permit the configured step")
 
 
 def collect_readiness(
-    config: DobotConfig, profile: LiveMotionProfile
+    config: DobotConfig, profile: LiveMotionProfile, *, active_gripper: bool = False
 ) -> tuple[OperatorReadiness, dict[str, bool]]:
     print(
         json.dumps(
@@ -118,9 +119,7 @@ def collect_readiness(
         flush=True,
     )
     print(STOP_LIMITATION, flush=True)
-    print(
-        "Manual neutral reset must already be complete and settled. No automatic reset.", flush=True
-    )
+    print("Robot must already be enabled, idle and settled. No automatic reset.", flush=True)
     operator = terminal_input("Operator name: ").strip()
     if not operator:
         raise MotionNotAuthorized("operator identity required")
@@ -131,7 +130,11 @@ def collect_readiness(
             "model, firmware compatibility, limits and review references are correct"
         ),
         "payload_verified": "the recorded tool/payload configuration matches the physical rig",
-        "gripper_disabled": "gripper is inactive and will remain inactive",
+        ("gripper_verified" if active_gripper else "gripper_disabled"): (
+            "gripper is inactive and will remain inactive"
+            if not active_gripper
+            else "gripper polarity, position limits and exclusive serial ownership are verified"
+        ),
         "workspace_clear": "workspace and the robot/link swept volume are clear",
         "operator_present": "you are physically beside the robot",
         "estop_tested": "physical E-stop is tested and reachable now",
@@ -140,17 +143,23 @@ def collect_readiness(
         ),
     }
     if config.local_micro_move is not None:
-        checks["frames_verified"] = (
-            "default base user0/tool0 flange TCP is used; gripper TCP is NOT calibrated"
+        checks["frames_verified"] = "base user0/tool0 and the recorded physical TCP match: " + str(
+            profile.tool_tcp_description
+        )
+        motion_description = (
+            f"reviewed bounded translation/gripper task with "
+            f"{config.local_micro_move.distance_m * 1000:g}mm steps "
+            if active_gripper
+            else f"reviewed single +Z{config.local_micro_move.distance_m * 1000:g}mm "
         )
         checks["production_profile_verified"] = (
-            "reviewed standalone +Z10mm envelope/engineering thresholds and the "
+            motion_description + "envelope/engineering thresholds and the "
             "operator-approved unknown-firmware exception; this is NOT a general "
             "workspace or measured table Z"
         )
         checks["payload_verified"] = (
-            "controller assumption 1.0kg/zero CoM is provisional, NOT measured calibration; "
-            "gripper is empty and you accept this documented limitation"
+            "recorded controller payload matches the rig; no CoM calibration is inferred: "
+            + str(profile.payload_description)
         )
     print("Current-session readiness checklist (every item must be true):", flush=True)
     for number, (key, message) in enumerate(checks.items(), start=1):
@@ -167,9 +176,10 @@ def collect_readiness(
         confirmed["estop_tested"],
         confirmed["operator_present"],
         confirmed["workspace_clear"],
-        confirmed["gripper_disabled"],
+        not active_gripper,
+        active_gripper,
     )
-    readiness.require()
+    readiness.require(allow_active_gripper=active_gripper)
     return readiness, confirmed
 
 
@@ -191,7 +201,7 @@ def review_plan(
         "robot_mode": int(plan.starting_measured_state.mode),
         "pose_before": asdict(plan.starting_measured_state),
         "direction": plan.micro_move_direction,
-        "displacement_m": "0.010",
+        "displacement_m": str(micro_move_distance(driver.validation_safety)),
         "user": plan.request.user,
         "tool": plan.request.tool,
         "agent_target": plan.final_agent_pose,
@@ -283,14 +293,14 @@ def _summarize(driver: LiveDobotMotionDriver, plan: CartesianMotionPlan | None) 
         "no_observed_error_collision": bool(
             after and not after.errors and after.mode is RobotMode.ENABLED_IDLE
         ),
-        "exact_10mm_fixed_native_orientation": bool(
+        "exact_reviewed_step_fixed_native_orientation": bool(
             plan
             and plan.micro_move_direction
             and plan.request.native_decimal
             and plan.starting_measured_state.native_decimal
             and plan.request.native_decimal
-            == plan.starting_measured_state.native_decimal.translated_10mm(
-                plan.micro_move_direction
+            == plan.starting_measured_state.native_decimal.translated_mm(
+                plan.micro_move_direction, int(micro_move_distance(driver.validation_safety) * 1000)
             )
         ),
         "no_automatic_lifecycle": all(

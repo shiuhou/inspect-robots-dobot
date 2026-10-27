@@ -103,13 +103,20 @@ class NativeDecimalPose:
         return NativePose(*(float(v) for v in self.values))
 
     def translated_10mm(self, direction: str) -> NativeDecimalPose:
+        return self.translated_mm(direction, 10)
+
+    def translated_mm(self, direction: str, distance_mm: int) -> NativeDecimalPose:
+        if type(distance_mm) is not int or distance_mm not in (5, 10):
+            raise ProtocolError("native micro-move distance must be exactly 5mm or 10mm")
         if direction not in ("+X", "-X", "+Y", "-Y", "+Z", "-Z"):
             raise ProtocolError("choose exactly +X/-X/+Y/-Y/+Z/-Z; no default direction")
         index = "XYZ".index(direction[1])
         tokens = list(self.values)
         with localcontext() as context:
             context.prec = 512
-            tokens[index] = format(Decimal(tokens[index]) + Decimal(direction[0] + "10"), "f")
+            tokens[index] = format(
+                Decimal(tokens[index]) + Decimal(direction[0] + str(distance_mm)), "f"
+            )
         return NativeDecimalPose(tuple(tokens))
 
     def squared_distance_mm(self, other: NativeDecimalPose) -> Decimal:

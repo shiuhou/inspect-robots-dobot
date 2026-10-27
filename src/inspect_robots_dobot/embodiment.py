@@ -67,10 +67,11 @@ def build_info(config: DobotConfig) -> EmbodimentInfo:
     low = high = None
     max_step: tuple[float | None, ...] | None = None
     if profile is not None:
-        low = np.array(
-            (*profile.workspace_low[:2], profile.minimum_tcp_z, *profile.orientation_low, 0.0)
-        )
-        high = np.array((*profile.workspace_high, *profile.orientation_high, 1.0))
+        if profile.workspace_low is not None and profile.workspace_high is not None:
+            low = np.array(
+                (*profile.workspace_low[:2], profile.minimum_tcp_z, *profile.orientation_low, 0.0)
+            )
+            high = np.array((*profile.workspace_high, *profile.orientation_high, 1.0))
         # Per-axis declared budgets conservatively imply the Euclidean limit.
         component = profile.max_translation_step / math.sqrt(3)
         # Rotation triangle inequality: sum of the three axis turns bounds SO(3).

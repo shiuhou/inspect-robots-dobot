@@ -28,7 +28,7 @@ from .driver import FakeDobotDriver
 from .errors import ConfigurationError, SafetyRejected
 from .gripper import ShadowGripperExecutor, validate_normalized
 from .motion import CartesianMotionPlan
-from .safety import MotionAuthority
+from .safety import MotionAuthority, validate_position
 from .types import PoseSI
 
 CAMERA_ORDER = ("front_rgb", "right_rgb", "wrist_rgb")
@@ -209,19 +209,22 @@ def generate_candidates(observation: Observation, profile: SafetyProfile) -> tup
         delta = [0.0, 0.0, 0.0]
         delta[axis] = sign * step
         target = current[:3] + delta
-        if (
-            np.all(target >= np.asarray(profile.workspace_low))
-            and np.all(target <= np.asarray(profile.workspace_high))
-            and target[2] >= profile.minimum_tcp_z
-        ):
-            candidates.append(
-                Candidate(
-                    label,
-                    "translate",
-                    (float(delta[0]), float(delta[1]), float(delta[2])),
-                    f"bounded {label} translation of {step:g} m",
-                )
+        try:
+            validate_position(
+                PoseSI(float(target[0]), float(target[1]), float(target[2]), 0, 0, 0),
+                profile,
+                label="candidate",
             )
+        except SafetyRejected:
+            continue
+        candidates.append(
+            Candidate(
+                label,
+                "translate",
+                (float(delta[0]), float(delta[1]), float(delta[2])),
+                f"bounded {label} translation of {step:g} m",
+            )
+        )
     candidates.extend(
         Candidate(name, name, (0.0, 0.0, 0.0), f"semantic {name} proposal")
         for name in SEMANTIC_ACTIONS

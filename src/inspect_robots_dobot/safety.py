@@ -23,6 +23,11 @@ from .transforms import (
 from .types import PoseSI, RobotMode, RobotSnapshot
 from .units import orientation_distance, translation_distance
 
+# Distances are computed from SI floats after converting controller decimals.
+# This only absorbs arithmetic roundoff at an authored budget boundary; it is
+# far below the smallest configured motion budget and is not a physical margin.
+_DISTANCE_ROUNDOFF_M = 1e-12
+
 
 @dataclass(frozen=True)
 class MotionAuthority:
@@ -63,13 +68,14 @@ def validate_snapshot(snapshot: RobotSnapshot, profile: SafetyProfile, now: floa
 def validate_position(pose: PoseSI, profile: SafetyProfile, *, label: str) -> None:
     if not all(math.isfinite(v) for v in pose.values):
         raise SafetyRejected(f"REJECT: {label} contains NaN/Inf")
-    for axis, v, lo, hi in zip(
-        "xyz", pose.xyz, profile.workspace_low, profile.workspace_high, strict=True
-    ):
-        if not lo <= v <= hi:
-            raise SafetyRejected(
-                f"REJECT: {label} {axis}={v:.6g} m is outside [{lo:.6g},{hi:.6g}] m"
-            )
+    if profile.workspace_low is not None and profile.workspace_high is not None:
+        for axis, v, lo, hi in zip(
+            "xyz", pose.xyz, profile.workspace_low, profile.workspace_high, strict=True
+        ):
+            if not lo <= v <= hi:
+                raise SafetyRejected(
+                    f"REJECT: {label} {axis}={v:.6g} m is outside [{lo:.6g},{hi:.6g}] m"
+                )
     if pose.z < profile.minimum_tcp_z:
         raise SafetyRejected(
             f"REJECT: {label} z={pose.z:.6g} m is below configured minimum "
@@ -93,7 +99,7 @@ def validate_target(
         validate_orientation(target, reference, profile, label="requested orientation")
     translation = translation_distance(current.pose, target)
     orientation = orientation_distance(current.pose, target)
-    if translation > profile.max_translation_step:
+    if translation > profile.max_translation_step + _DISTANCE_ROUNDOFF_M:
         raise SafetyRejected(
             f"REJECT: translation delta={translation:.6g} m exceeds "
             f"{profile.max_translation_step:.6g} m"

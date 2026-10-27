@@ -1,4 +1,4 @@
-"""Measured-start-only geometry for one standalone +Z 10mm experiment.
+"""Measured-start-only geometry for one standalone +Z 5mm or 10mm experiment.
 
 The lower Z bound is a local observation threshold, NOT a measured table height.
 An envelope is prospective data, never authority. Its session/expiry must also
@@ -50,14 +50,19 @@ class LocalMicroMoveEnvelope:
             raise SafetyRejected(
                 "local envelope requires measured idle/error-free user0/tool0 pose"
             )
-        if self.target_native != s.native_decimal.translated_10mm("+Z"):
-            raise SafetyRejected("local envelope target must preserve native pose except +10mm Z")
+        if self.settings.minimum_tcp_z is not None and s.pose.z < self.settings.minimum_tcp_z:
+            raise SafetyRejected("local measured TCP is below the recorded floor")
+        if self.target_native != s.native_decimal.translated_mm(
+            "+Z", int(self.settings.distance_m * 1000)
+        ):
+            raise SafetyRejected("local target must preserve native pose except reviewed +Z step")
 
     @property
     def low(self) -> tuple[float, float, float]:
         x, y, z = self.start.pose.xyz
         m = self.settings.measurement_margin_m
-        return (x - m, y - m, z - m)
+        floor = self.settings.minimum_tcp_z
+        return (x - m, y - m, max(z - m, floor) if floor is not None else z - m)
 
     @property
     def high(self) -> tuple[float, float, float]:
@@ -76,7 +81,8 @@ class LocalEnvelopeSafety(SafetyProfile):
         super().__post_init__()
         e, s = self.envelope, self.envelope.settings
         if (
-            self.workspace_low != e.low
+            self.workspace_mode != "bounded"
+            or self.workspace_low != e.low
             or self.workspace_high != e.high
             or self.minimum_tcp_z != e.low[2]
             or self.user_frame != 0
@@ -84,7 +90,7 @@ class LocalEnvelopeSafety(SafetyProfile):
             or self.orientation_low != (0, 0, 0)
             or self.orientation_high != (0, 0, 0)
             # decimal_micro_profile adds only its existing round-off allowance.
-            or self.max_translation_step not in (0.010, 0.010 + 1e-12)
+            or self.max_translation_step not in (s.distance_m, s.distance_m + 1e-12)
         ):
             raise ConfigurationError("local envelope geometry/direction budget cannot be widened")
         for name in (
@@ -109,7 +115,7 @@ def envelope_safety(envelope: LocalMicroMoveEnvelope) -> LocalEnvelopeSafety:
         minimum_tcp_z=envelope.low[2],
         user_frame=0,
         tool_frame=0,
-        max_translation_step=0.010,
+        max_translation_step=s.distance_m,
         max_orientation_step=s.max_orientation_step,
         speed_percent=s.speed_percent,
         acceleration_percent=s.acceleration_percent,

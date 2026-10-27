@@ -19,6 +19,16 @@ from .units import from_native, to_native, translation_distance
 
 AgentPose = tuple[float, ...]
 Waypoints = tuple[AgentPose, ...]
+_DISTANCE_ROUNDOFF_M = 1e-12
+
+
+def micro_move_distance(profile: SafetyProfile) -> float:
+    if isinstance(profile, LocalEnvelopeSafety):
+        return profile.envelope.settings.distance_m
+    distance = min(0.010, profile.max_translation_step)
+    if distance not in (0.005, 0.010):
+        raise SafetyRejected("exact native micro-move requires a 5mm or 10mm budget")
+    return distance
 
 
 def decimal_micro_profile(
@@ -115,7 +125,7 @@ def validate_cartesian_path(
         try:
             validate_target(target, previous, profile, now, reference=reference)
             validate_target(target, start, profile, now, reference=reference)
-            if translation_distance(start.pose, target) > limit:
+            if translation_distance(start.pose, target) > limit + _DISTANCE_ROUNDOFF_M:
                 raise SafetyRejected(f"aggregate displacement exceeds {limit:.6g} m")
             offset = np.asarray(target.xyz) - np.asarray(start.pose.xyz)
             fraction = float(offset @ direction) / length2 if length2 else 0.0
@@ -232,20 +242,21 @@ def build_motion_plan(
     ):
         raise SafetyRejected("local envelope is bound to one start, +Z target, chunk and expiry")
     original_profile = profile
+    distance = micro_move_distance(profile)
     if micro_move_direction is not None:
         if start.native_decimal is None:
             raise SafetyRejected("micro-move requires native decimal measurement")
         profile = decimal_micro_profile(
             start.native_decimal,
-            start.native_decimal.translated_10mm(micro_move_direction),
+            start.native_decimal.translated_mm(micro_move_direction, int(distance * 1000)),
             profile,
         )
     validation = validate_cartesian_path(waypoints, start, reference, profile, now, keepouts)
     if micro_move_direction is not None:
         validation = replace(
             validation,
-            total_displacement_m=0.010,
-            displacement_limit_m=min(0.010, original_profile.max_translation_step),
+            total_displacement_m=distance,
+            displacement_limit_m=min(distance, original_profile.max_translation_step),
         )
     target = action_target(waypoints[-1], start, reference, profile)
     native_decimal = None
@@ -255,12 +266,12 @@ def build_motion_plan(
             raise SafetyRejected(
                 "micro-move requires original native decimals matching measured SI"
             )
-        native_decimal = native_start.translated_10mm(micro_move_direction)
+        native_decimal = native_start.translated_mm(micro_move_direction, int(distance * 1000))
         exact_target = from_native(native_decimal.native)
         expected = (*exact_target.xyz, 0.0, 0.0, 0.0, 0.0)
         if reference != start.pose or waypoints != (expected,) or target != exact_target:
             raise SafetyRejected(
-                "micro-move must be exactly one 10mm target preserving measured orientation"
+                "micro-move must be exactly one reviewed step preserving measured orientation"
             )
     request = DobotMovLRequest(
         native_decimal.native if native_decimal is not None else to_native(target),
@@ -272,9 +283,11 @@ def build_motion_plan(
     )
     # Protocol conversion must preserve the validated endpoint, including all bounds.
     validate_target(from_native(request.pose), start, profile, now, reference=reference)
-    if translation_distance(
-        start.pose, from_native(request.pose)
-    ) > validation.displacement_limit_m + (1e-12 if micro_move_direction is not None else 0):
+    if translation_distance(start.pose, from_native(request.pose)) > (
+        validation.displacement_limit_m
+        + _DISTANCE_ROUNDOFF_M
+        + (1e-12 if micro_move_direction is not None else 0)
+    ):
         raise SafetyRejected("REJECT: converted native endpoint exceeds aggregate displacement")
     if any(box.intersects(start.pose, from_native(request.pose)) for box in keepouts):
         raise SafetyRejected("REJECT: converted native endpoint path intersects keepout")
@@ -301,10 +314,14 @@ def build_micro_move_plan(
     now: float,
     keepouts: tuple[KeepoutBox, ...] = (),
 ) -> CartesianMotionPlan:
-    """One operator-selected native decimal 10mm translation; never regenerate at send."""
+    """One exact native decimal translation; never regenerate at send."""
     if start.native_decimal is None or start.joints_synthetic:
         raise SafetyRejected("micro-move requires non-synthetic native measured pose")
-    target = from_native(start.native_decimal.translated_10mm(direction).native)
+    target = from_native(
+        start.native_decimal.translated_mm(
+            direction, int(micro_move_distance(profile) * 1000)
+        ).native
+    )
     return build_motion_plan(
         chunk_id,
         ((*target.xyz, 0.0, 0.0, 0.0, 0.0),),

@@ -1,0 +1,23 @@
+{
+  "schema_version": "astra_task_view_v1",
+  "mode": "demo",
+  "task": "把藍色方塊放進盒子",
+  "stage": "proposed",
+  "updated_at": "2026-09-27T00:00:00+08:00",
+  "run_id": "offline-layout-demo",
+  "decision_id": "demo-001",
+  "model": "示範資料 · 未呼叫模型",
+  "note": "先朝方塊方向移動 5 mm，再觀察夾爪與方塊的位置。這是面板示範文字，沒有提出或執行實體命令。",
+  "action_name": "move_to",
+  "current_xyz_m": [0.300, 0.000, 0.200],
+  "target_xyz_m": [0.305, 0.000, 0.200],
+  "gripper_intent": "hold",
+  "pre_check": "NOT_RECORDED",
+  "approver": "NOT_RECORDED",
+  "execution_result": "示範資料，未執行動作",
+  "motion_commands_sent": 0,
+  "gripper_commands_sent": 0,
+  "task_success": null,
+  "latency_s": null,
+  "robot_mode": null
+}

@@ -111,8 +111,9 @@ class OperatorReadiness:
     operator_present: bool
     workspace_clear: bool
     gripper_disabled: bool
+    gripper_verified: bool = False
 
-    def require(self) -> None:
+    def require(self, *, allow_active_gripper: bool = False) -> None:
         if not self.operator.strip():
             raise ConfigurationError("operator identity is required")
         for name in (
@@ -122,10 +123,45 @@ class OperatorReadiness:
             "estop_tested",
             "operator_present",
             "workspace_clear",
-            "gripper_disabled",
         ):
             if getattr(self, name) is not True:
                 raise ConfigurationError(f"operator must verify {name} in this session")
+        if self.gripper_disabled is not True and not (
+            allow_active_gripper and self.gripper_verified is True
+        ):
+            raise ConfigurationError("operator must verify gripper_disabled in this session")
+
+
+@dataclass(frozen=True)
+class LiveTaskSession:
+    """Explicit task authorization with optional motion and total time limits.
+
+    Successful actions retain the sole Dashboard stream. Every action still has
+    a distinct one-use capability; any failure terminates the entire session.
+    Firmware uncertainty is recorded, never promoted to compatibility evidence.
+    """
+
+    max_motions: int | None
+    lifetime_s: float | None
+    authorization_reference: str
+    allow_unknown_firmware: bool = False
+
+    def __post_init__(self) -> None:
+        if self.max_motions is not None and (
+            type(self.max_motions) is not int or not 1 <= self.max_motions <= 100
+        ):
+            raise ConfigurationError("task session requires 1..100 motion attempts")
+        if self.lifetime_s is not None:
+            positive("task lifetime", self.lifetime_s)
+            if self.lifetime_s > 1800:
+                raise ConfigurationError("task session lifetime exceeds 1800s cap")
+        if (
+            not isinstance(self.authorization_reference, str)
+            or not self.authorization_reference.strip()
+        ):
+            raise ConfigurationError("explicit current-session task authorization required")
+        if type(self.allow_unknown_firmware) is not bool:
+            raise ConfigurationError("unknown firmware acknowledgment must be explicit")
 
 
 def load_live_profile(

@@ -1,4 +1,5 @@
 import json
+from dataclasses import replace
 
 import numpy as np
 import pytest
@@ -93,6 +94,23 @@ def test_candidate_set_is_bounded_orientation_pinned_and_gripper_inactive():
             chunk.actions[-1].data[3:], observation.state["eef_state"][3:]
         )
         assert chunk.actions[-1].data[6] == 0
+    finally:
+        embodiment.close()
+
+
+def test_floor_candidates_use_floor_without_a_box(floor_profile):
+    embodiment, observation = build_fixture_observation()
+    try:
+        state = dict(observation.state)
+        state["eef_state"] = np.array([-0.5, 0.5, floor_profile.minimum_tcp_z, 0, 0, 0, 0])
+        candidates = generate_candidates(replace(observation, state=state), floor_profile)
+        assert {c.candidate_id for c in candidates if c.action == "translate"} == {
+            "+X",
+            "-X",
+            "+Y",
+            "-Y",
+            "+Z",
+        }
     finally:
         embodiment.close()
 

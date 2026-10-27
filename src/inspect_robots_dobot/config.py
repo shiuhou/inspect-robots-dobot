@@ -7,7 +7,7 @@ import math
 from dataclasses import dataclass
 from ipaddress import ip_address
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from .errors import ConfigurationError
 from .transforms import DEFAULT_SINGULARITY_MARGIN
@@ -20,8 +20,8 @@ def positive(name: str, value: float) -> None:
 
 @dataclass(frozen=True)
 class SafetyProfile:
-    workspace_low: tuple[float, float, float]
-    workspace_high: tuple[float, float, float]
+    workspace_low: tuple[float, float, float] | None
+    workspace_high: tuple[float, float, float] | None
     minimum_tcp_z: float
     user_frame: int
     tool_frame: int
@@ -38,26 +38,34 @@ class SafetyProfile:
     orientation_low: tuple[float, float, float] = (0.0, 0.0, 0.0)
     orientation_high: tuple[float, float, float] = (0.0, 0.0, 0.0)
     orientation_singularity_margin: float = DEFAULT_SINGULARITY_MARGIN
+    workspace_mode: Literal["bounded", "z_floor_only"] = "bounded"
 
     def __post_init__(self) -> None:
-        for name, vector in (
-            ("workspace_low", self.workspace_low),
-            ("workspace_high", self.workspace_high),
-        ):
-            if (
-                not isinstance(vector, tuple)
-                or len(vector) != 3
-                or not all(type(v) in (int, float) and math.isfinite(v) for v in vector)
+        if type(self.minimum_tcp_z) not in (int, float) or not math.isfinite(self.minimum_tcp_z):
+            raise ConfigurationError("minimum_tcp_z must be a finite metre value")
+        if self.workspace_mode == "z_floor_only":
+            if self.workspace_low is not None or self.workspace_high is not None:
+                raise ConfigurationError("z_floor_only requires both workspace bounds to be null")
+        elif self.workspace_mode == "bounded":
+            for name, vector in (
+                ("workspace_low", self.workspace_low),
+                ("workspace_high", self.workspace_high),
             ):
-                raise ConfigurationError(f"{name} must contain three finite metre values")
-        if any(lo >= hi for lo, hi in zip(self.workspace_low, self.workspace_high, strict=True)):
-            raise ConfigurationError("workspace_low must be strictly below workspace_high")
-        if (
-            type(self.minimum_tcp_z) not in (int, float)
-            or not math.isfinite(self.minimum_tcp_z)
-            or not (self.workspace_low[2] <= self.minimum_tcp_z < self.workspace_high[2])
-        ):
-            raise ConfigurationError("minimum_tcp_z must be within the configured workspace")
+                if (
+                    not isinstance(vector, tuple)
+                    or len(vector) != 3
+                    or not all(type(v) in (int, float) and math.isfinite(v) for v in vector)
+                ):
+                    raise ConfigurationError(f"{name} must contain three finite metre values")
+            assert self.workspace_low is not None and self.workspace_high is not None
+            if any(
+                lo >= hi for lo, hi in zip(self.workspace_low, self.workspace_high, strict=True)
+            ):
+                raise ConfigurationError("workspace_low must be strictly below workspace_high")
+            if not self.workspace_low[2] <= self.minimum_tcp_z < self.workspace_high[2]:
+                raise ConfigurationError("minimum_tcp_z must be within the configured workspace")
+        else:
+            raise ConfigurationError("workspace_mode must be bounded or z_floor_only")
         for name in ("user_frame", "tool_frame"):
             v = getattr(self, name)
             if type(v) is not int or not 0 <= v <= 50:
@@ -220,6 +228,7 @@ class LocalMicroMoveSettings:
     speed_percent: int = 5
     acceleration_percent: int = 5
     threshold_class: str = "ENGINEERING_THRESHOLD_FOR_FIRST_MICROMOVE"
+    minimum_tcp_z: float | None = None
 
     @property
     def max_translation_step(self) -> float:
@@ -234,8 +243,12 @@ class LocalMicroMoveSettings:
         return (0.0, 0.0, 0.0)
 
     def __post_init__(self) -> None:
-        if self.direction != "+Z" or self.distance_m != 0.010:
-            raise ConfigurationError("local micro-move is exclusively +Z exactly 0.010 m")
+        if self.direction != "+Z" or self.distance_m not in (0.005, 0.010):
+            raise ConfigurationError("local micro-move is exclusively +Z exactly 5mm or 10mm")
+        if self.minimum_tcp_z is not None and (
+            type(self.minimum_tcp_z) not in (int, float) or not math.isfinite(self.minimum_tcp_z)
+        ):
+            raise ConfigurationError("local minimum_tcp_z must be finite or null")
         for name, required in (
             ("user_frame", 0),
             ("tool_frame", 0),
@@ -372,7 +385,7 @@ def load_config(path: Path) -> DobotConfig:
         if safety_data is not None:
             data = dict(safety_data)
             for key in ("workspace_low", "workspace_high", "orientation_low", "orientation_high"):
-                if key in data:
+                if key in data and data[key] is not None:
                     data[key] = tuple(data[key])
             safety = SafetyProfile(**data)
         camera_data = obj.get("camera")

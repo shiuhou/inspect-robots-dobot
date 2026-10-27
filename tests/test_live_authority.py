@@ -373,3 +373,64 @@ def test_even_internal_channel_rejects_lifecycle_and_other_motion(profile, pose,
         driver._channel._exchange(command)
     assert peer.sent == []
     driver.close()
+
+
+@pytest.mark.parametrize("acknowledged", [False, True])
+def test_task_session_requires_explicit_firmware_exception(profile, pose, clock, acknowledged):
+    from inspect_robots_dobot.live_profile import LiveTaskSession
+
+    _, peer, factory, _ = setup(profile, pose, clock)
+    driver = LiveDobotMotionDriver(
+        connection(protocol_compatibility_confirmed=False),
+        production_profile(profile),
+        allow_motion=True,
+        socket_factory=factory,
+        clock=clock,
+        transport_is_mock=True,
+        task_session=LiveTaskSession(2, 10.0, "fictional test authorization", acknowledged),
+    )
+    try:
+        driver.connect(allow_connection=True)
+        driver.confirm_readiness(readiness())
+        driver.begin_task_session()
+        if acknowledged:
+            assert driver.measure_start().command_id == 42
+        else:
+            with pytest.raises(MotionNotAuthorized, match="firmware compatibility"):
+                driver.measure_start()
+        assert not movements(peer)
+    finally:
+        driver.close()
+
+
+@pytest.mark.parametrize("end", ["cancel", "deadline", "budget", "transport_failure"])
+def test_task_session_failure_or_exhaustion_never_resends(profile, pose, clock, end):
+    from inspect_robots_dobot.live_profile import LiveTaskSession
+
+    session = LiveTaskSession(1 if end == "budget" else 2, 10.0, "fictional authorization")
+    driver, peer, _, plan = setup(profile, pose, clock, task_session=session)
+    driver.connect(allow_connection=True)
+    driver.confirm_readiness(readiness())
+    driver.begin_task_session()
+    authority = driver.arm(plan, confirmation="MOVE ONCE")
+    if end == "transport_failure":
+        peer.move_reply = "lost"
+    first = driver.execute(plan, authority)
+    assert len(movements(peer)) == 1
+    if end == "transport_failure":
+        assert first.failure_cause is not None
+        assert driver.connections_closed
+    elif end == "budget":
+        assert first.failure_cause is None
+        assert driver.connections_closed
+    else:
+        assert first.failure_cause is None
+        assert not driver.connections_closed
+        if end == "cancel":
+            driver.request_stop()
+        else:
+            clock.sleep(11)
+    with pytest.raises((MotionNotAuthorized, MotionCancelled, SafetyRejected, RuntimeError)):
+        driver.arm(plan, confirmation="MOVE ONCE")
+    assert len(movements(peer)) == 1
+    driver.close()

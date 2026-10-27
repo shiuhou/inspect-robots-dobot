@@ -160,7 +160,9 @@ class MotionPeer(ScriptedSocket):
             raise self.close_error
 
 
-def setup(safety, pose, clock, *, live_profile=None, config=None, allow_motion=True):
+def setup(
+    safety, pose, clock, *, live_profile=None, config=None, allow_motion=True, task_session=None
+):
     profile = live_profile or production_profile(safety)
     start = RobotSnapshot(pose, (0.0,) * 6, RobotMode.ENABLED_IDLE, (), 42, clock.monotonic(), 0, 0)
     plan = build_motion_plan(
@@ -182,6 +184,7 @@ def setup(safety, pose, clock, *, live_profile=None, config=None, allow_motion=T
         socket_factory=factory,
         clock=clock,
         transport_is_mock=True,
+        task_session=task_session,
     )
     return driver, peer, factory, plan
 
