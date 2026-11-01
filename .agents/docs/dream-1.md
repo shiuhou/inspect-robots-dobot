@@ -41,6 +41,29 @@ missing camera, or interpret YAM joint targets as Nova2 targets. This implementa
 conservatively supports only a matching custom checkpoint and the exact schema
 above; other vendor-approved configurations require a focused adapter review.
 
+## SDK 1.0.14 update (2026-11-01)
+
+The integration now pins and locally validates `dreamlabs-client==1.0.14`.
+The original discovery above was performed with 1.0.9 and has not been repeated
+for this upgrade. The project `.venv` uses Python 3.13 for probe/schema/recorded
+custom-checkpoint APIs; no client IK is enabled. The SDK documentation says IK
+requires Python 3.11 or newer; the full `dreamlabs` library advertises 3.10–3.12.
+These are distinct requirements; Python 3.13 IK compatibility is unverified.
+
+Inspected installed 1.0.14 facade, model metadata, strict action/observation
+validation and schema parser. A test exercises the actual facade, frame window
+and strict schema with the outbound inference and recorder replaced by offline
+fixtures. The single-arm schema still passes local validation. SDK 1.0.14 supports
+a custom URDF arm file with user-measured TCP, approach and jaw directions;
+its documented YAM adaptation still uses both arms and three camera roles.
+Upgrade validation: **1063 tests PASS** (including 61 Dream tests), strict mypy
+and Ruff lint/format PASS; real SDK local schema PASS. No API or hardware call
+was made during the upgrade. Both the project `.venv` and existing
+`~/dream-api-env` now have 1.0.14.
+
+No Nova2 arm file or physical calibration is inferred from this upgrade. Model
+compatibility checks and the disconnected action output remain in force.
+
 ## Commands
 
 From this component's repository root:
@@ -61,6 +84,7 @@ provider-independent. The already installed `~/dream-api-env` was used to inspec
 SDK 1.0.9 and initially probe the API; no replacement environment is required.
 The project environment adds the same SDK plus Pillow so the commands above use
 one reproducible environment with the adapter's existing dependencies.
+Use `uv sync --frozen --extra agent --extra dream` after pulling this update.
 
 Explicit cloud **metadata only** (no images, policy, hardware or paid training):
 
@@ -192,7 +216,7 @@ Execution and broker integration require a separate task and safety review.
 
 ## Validation and sources
 
-Tests run: full socket/device-blocked suite **989 PASS** (930 existing + 59 Dream),
+Original validation: full socket/device-blocked suite **989 PASS** (930 existing + 59 Dream),
 strict mypy **PASS**, Ruff lint/format **PASS**. SDK local schema validation **PASS**;
 authenticated discovery **PASS**. Physical capture, Nova2 cloud inference and physical
 execution **NOT_RUN**. No firmware, visual grounding or hardware readiness claim.
@@ -212,4 +236,6 @@ Primary sources inspected on 2026-10-27:
   `dream.credentials`, `dream.client` and `shared.datasets.embodiments`: signatures,
   parser, supported arms, metadata, shapes, units and recording behavior. The local
   schema validator uses the version-pinned internal registration parser because SDK
-  1.0.9 exposes no public standalone embodiment validation method.
+  1.0.14 also exposes no public standalone embodiment validation method.
+- [SDK 1.0.14 documentation](https://pypi.org/project/dreamlabs-client/1.0.14/):
+  custom arm-file and current inference contracts; installed source inspected offline.

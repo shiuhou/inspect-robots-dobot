@@ -1,4 +1,4 @@
-"""SDK 1.0.9 boundary. No registration, training, device access or action dispatch."""
+"""SDK 1.0.14 boundary. No registration, training, device access or action dispatch."""
 
 from __future__ import annotations
 
@@ -35,14 +35,14 @@ def sdk() -> Any:
     # recordings (SDK behavior), so only call it for an explicit inference request.
     os.environ.setdefault("DREAM_LOG", "off")
     module = importlib.import_module("dream")
-    if module.__version__ != "1.0.9":
-        raise DreamIntegrationError("requires inspected dreamlabs-client 1.0.9")
+    if module.__version__ != "1.0.14":
+        raise DreamIntegrationError("requires inspected dreamlabs-client 1.0.14")
     return module
 
 
 def validate_local_schema() -> None:
     sdk()
-    # No public standalone schema validator in 1.0.9. Use the SAME local parser
+    # No public standalone schema validator in 1.0.14. Use the SAME local parser
     # add_embodiment calls, without calling that network-writing method.
     parser = importlib.import_module("shared.datasets.embodiments")
     body = parser.check_registration(nova2_config())

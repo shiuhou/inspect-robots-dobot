@@ -395,3 +395,51 @@ def test_action_values_must_be_numbers_not_strings_or_bools(value):
     bad["per_key"]["action.right_arm"] = [[value] * 6] * 3
     with pytest.raises(api.DreamIntegrationError, match="malformed"):
         api.decode_action(bad, contract())
+
+
+def test_installed_sdk_policy_and_action_contract_without_network(monkeypatch):
+    """Exercise real facade/window/strict schema; replace only outbound inference."""
+    pytest.importorskip("dream")
+    module = api.sdk()
+    client = module.DreamClient(api_key="offline-test-key")
+    # Recorder is a separate network path; suppress it only in this SDK-boundary test.
+    monkeypatch.setattr(client, "_new_recording", lambda fps: (None, "offline test"))
+    try:
+        client.policy(
+            {
+                "checkpoint": "test/nova2",
+                "embodiment": api.nova2_config(),
+                "strict": True,
+                "timeout_ms": 1000,
+                "action_hz": 20.0,
+            }
+        )
+        observed = []
+
+        def reply(self, observation):
+            observed.append(observation)
+            return action()
+
+        monkeypatch.setattr(type(client._policy), "_post", reply)
+        obs, configs = measured_test_observation()
+        # Discovery must also remain offline while infer_once uses the actual SDK.
+        monkeypatch.setattr(client, "get_models", lambda: [model()])
+        result = infer(client, obs, configs)
+        assert result["action"]["joint_targets_rad"][0] == [0.1] * 6
+        assert len(observed) == 1
+        assert set(observed[0]) >= {
+            "state.right_arm",
+            "state.right_gripper",
+            "video.front",
+            "video.wrist",
+        }
+    finally:
+        client.close()
+
+
+def test_sdk_refuses_unreviewed_version(monkeypatch):
+    monkeypatch.setattr(
+        api.importlib, "import_module", lambda name: SimpleNamespace(__version__="1.0.9")
+    )
+    with pytest.raises(api.DreamIntegrationError, match="1.0.14"):
+        api.sdk()

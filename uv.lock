@@ -238,7 +238,7 @@ toml = [
 
 [[package]]
 name = "dreamlabs-client"
-version = "1.0.9"
+version = "1.0.14"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
@@ -247,7 +247,7 @@ dependencies = [
     { name = "websockets", version = "17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
 ]
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/49/02/1c5091027a1640177845fe86c245316478974f8c4398dd9b334ef7f505a3/dreamlabs_client-1.0.9-py3-none-any.whl", hash = "sha256:8751cc6a1e103a359460ddc81eb5e3be0ec55fc73faff298c8f442fd5c390b67", size = 458764, upload-time = "2026-10-23T21:11:47.006Z" },
+    { url = "https://files.pythonhosted.org/packages/03/e0/5a5a37a5eab98dacf4c771a0eb113f9a88878377eaef195de8d60c39fcbc/dreamlabs_client-1.0.14-py3-none-any.whl", hash = "sha256:deeaea8063cac2a63a13c0814389b8316944647c3520017ece86c654500802cb", size = 458485, upload-time = "2026-10-29T20:50:36.589Z" },
 ]
 
 [[package]]
@@ -370,7 +370,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "dreamlabs-client", marker = "extra == 'dream'", specifier = "==1.0.9" },
+    { name = "dreamlabs-client", marker = "extra == 'dream'", specifier = "==1.0.14" },
     { name = "inspect-robots", git = "https://github.com/robocurve/inspect-robots?rev=7e506e3b6f39530f18e75cf97b23c4287aa90f12" },
     { name = "inspect-robots-agent", marker = "extra == 'agent'", git = "https://github.com/robocurve/inspect-robots?subdirectory=plugins%2Finspect-robots-agent&rev=7e506e3b6f39530f18e75cf97b23c4287aa90f12" },
     { name = "numpy", specifier = ">=1.24,<2.5" },
